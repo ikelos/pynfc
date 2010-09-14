@@ -23,13 +23,13 @@ from distutils.core import setup, Extension
 
 setup(
     name = "pynfc",
-    version = "0.0.4",
+    version = "0.0.5",
     description = "Python bindings for libnfc",
     author = "Mike Auty",
-    ext_modules = [Extension("_nfc", 
-                             sources=["nfc.i"],
-                             libraries=["nfc"],
-                             swig_opts=["-I/usr/include", "-module", "nfc", "-interface", "_nfc", "-O"])
+    ext_modules = [Extension("_nfc",
+                             sources = ["nfc.i"],
+                             libraries = ["nfc"],
+                             swig_opts = ["-I/usr/include", "-module", "nfc", "-interface", "_nfc", "-O"])
                   ],
     data_files = [('examples', ['mifareauth.py'])],
     license = "GPL-2",

@@ -23,18 +23,20 @@ NDO_HANDLE_CRC = nfc.NDO_HANDLE_CRC
 NDO_HANDLE_PARITY = nfc.NDO_HANDLE_PARITY
 NDO_ACTIVATE_FIELD = nfc.NDO_ACTIVATE_FIELD
 NDO_ACTIVATE_CRYPTO1 = nfc.NDO_ACTIVATE_CRYPTO1
+NDO_EASY_FRAMING = nfc.NDO_EASY_FRAMING
+NDO_AUTO_ISO14443_4 = nfc.NDO_AUTO_ISO14443_4
 NDO_INFINITE_SELECT = nfc.NDO_INFINITE_SELECT
 NDO_ACCEPT_INVALID_FRAMES = nfc.NDO_ACCEPT_INVALID_FRAMES
 NDO_ACCEPT_MULTIPLE_FRAMES = nfc.NDO_ACCEPT_MULTIPLE_FRAMES
 
-MC_AUTH_A = nfc.MC_AUTH_A
-MC_AUTH_B = nfc.MC_AUTH_B
-MC_READ = nfc.MC_READ
-MC_WRITE = nfc.MC_WRITE
-MC_TRANSFER = nfc.MC_TRANSFER
-MC_DECREMENT = nfc.MC_DECREMENT
-MC_INCREMENT = nfc.MC_INCREMENT
-MC_STORE = nfc.MC_STORE
+MC_AUTH_A = 0x60
+MC_AUTH_B = 0x61
+MC_READ = 0x30
+MC_WRITE = 0xA0
+MC_TRANSFER = 0xB0
+MC_DECREMENT = 0xC0
+MC_INCREMENT = 0xC1
+MC_STORE = 0xC2
 
 NM_ISO14443A_106 = nfc.NM_ISO14443A_106
 NM_FELICA_212 = nfc.NM_FELICA_212
@@ -47,14 +49,14 @@ NM_PASSIVE_DEP = nfc.NM_PASSIVE_DEP
 class nfcdevice(object):
     """Standard NFC device"""
 
-    _command_maps = {nfc.MC_AUTH_A    : nfc.mifare_param_auth,
-                     nfc.MC_AUTH_B    : nfc.mifare_param_auth,
-                     nfc.MC_READ      : nfc.mifare_param_data,
-                     nfc.MC_WRITE     : nfc.mifare_param_data,
-                     nfc.MC_TRANSFER  : nfc.mifare_param_value,
-                     nfc.MC_DECREMENT : nfc.mifare_param_value,
-                     nfc.MC_INCREMENT : nfc.mifare_param_value,
-                     nfc.MC_STORE     : nfc.mifare_param_value}
+    _command_maps = [MC_AUTH_A,
+                     MC_AUTH_B,
+                     MC_READ,
+                     MC_WRITE,
+                     MC_TRANSFER,
+                     MC_DECREMENT,
+                     MC_INCREMENT,
+                     MC_STORE]
 
     def __init__(self):
         self.pdi = None
@@ -82,19 +84,19 @@ class nfcdevice(object):
         if self.pdi is not None:
             return self.pdi.acName
         return None
-    
+
     def get_handle_parity(self):
         """Returns whether the device currently handles the parity bits during transmission automatically"""
         if self.pdi is not None:
             return self.pdi.bPar
         return None
-    
+
     def get_handle_crc(self):
         """Returns whether the device currently calculates the necessary CRC for each transmission automatically"""
         if self.pdi is not None:
             return self.pdi.bCrc
         return None
-    
+
     def get_active(self):
         """Returns whether the device is currently active"""
         if self.pdi is not None:
@@ -109,26 +111,26 @@ class nfc_initiator(nfcdevice):
         if self.pdi is None:
             return False
         return nfc.nfc_initiator_init(self.pdi)
-    
+
     def select_tag(self, modulation, data):
         """Selects an NFC tag"""
         tag_info = nfc.nfc_target_info_t()
-        res = nfc.nfc_initiator_select_tag(self.pdi, modulation, data, tag_info)
+        res = nfc.nfc_initiator_select_passive_target(self.pdi, modulation, data, tag_info)
         if res:
             if modulation == NM_ISO14443A_106:
-                return {'atqa': tag_info.nai.get_atqa(), 
-                        'sak': tag_info.nai.get_sak(), 
-                        'uid': tag_info.nai.get_uid(), 
+                return {'atqa': tag_info.nai.get_atqa(),
+                        'sak': tag_info.nai.get_sak(),
+                        'uid': tag_info.nai.get_uid(),
                         'ats': tag_info.nai.get_ats()}
             elif modulation in [NM_ACTIVE_DEP, NM_FELICA_212, NM_FELICA_424, NM_ISO14443B_106, NM_JEWEL_106, NM_PASSIVE_DEP]:
                 # raise NotImplementedError("The tag_information for these devices is not yet implemented")
                 return ()
         return None
-    
+
     def deselect_tag(self):
         """Deselects any currently selected NFC tag"""
-        return nfc.nfc_initiator_deselect_tag(self.pdi)
-    
+        return nfc.nfc_initiator_deselect_target(self.pdi)
+
     def transceive_bits(self, bits, inlen, par = None):
         """Transceive bits as the reader"""
         res = nfc.nfc_initiator_transceive_bits(self.pdi, bits, inlen, par)
@@ -138,46 +140,40 @@ class nfc_initiator(nfcdevice):
         if self.get_handle_parity():
             return (a, b, None)
         return (a, b, c)
-    
+
     def transceive_bytes(self, inbytes):
         """Transceive full bytes as the reader"""
         return nfc.nfc_initiator_transceive_bytes(self.pdi, inbytes)
-    
-    def mifare_cmd(self, command, block, key=None, uid=None, data=None, value=None):
+
+    def mifare_cmd(self, command, block, key = None, uid = None, data = None, value = None):
         """Sends MIFARE commands as an initiator"""
-        param_type = self._command_maps.get(command, None)
-        if param_type is None:
+        if command not in self._command_maps:
             raise TypeError("Command type " + type(command) + " not found")
-        parameter = nfc.mifare_param()
-        if param_type == nfc.mifare_param_auth:
-            subparam = param_type()
-            subparam.set_key(key)
-            subparam.set_uid(uid)
-            parameter.mpa = subparam
-        elif param_type == nfc.mifare_param_data:
-            subparam = param_type()
-            subparam.set_data(data)
-            parameter.mpd = subparam
-        elif param_type == nfc.mifare_param_value:
-            subparam = param_type()
-            subparam.set_value(value)
-            parameter.mpv = subparam 
+        if block > 255 or block < 0:
+            raise TypeError("Value for block is too large")
+        inbytes = chr(command) + chr(block)
+        if command in [MC_AUTH_A, MC_AUTH_B]:
+            inbytes += key + uid
+        elif command in [MC_READ, MC_WRITE]:
+            inbytes += data
+        elif command in [MC_DECREMENT, MC_INCREMENT, MC_TRANSFER, MC_STORE]:
+            inbytes += value
         else:
             raise RuntimeError("Should never reach this point!")
-        res = nfc.nfc_initiator_mifare_cmd(self.pdi, command, block, parameter)
+        res = self.transceive_bytes(inbytes)
         if res and command == MC_READ:
             return parameter.mpd.get_data()
         return res
 
 class nfc_target(nfcdevice):
     """NFC Target (card/emulation) device"""
-    
+
     def init(self):
         """Initializes the reader as a tag"""
         if self.pdi is None:
-            return False 
+            return False
         return nfc.nfc_target_init(self.pdi)
-    
+
     def receive_bits(self):
         """Receives bits as the tag"""
         res = nfc.nfc_target_receive_bits(self.pdi)
@@ -187,15 +183,15 @@ class nfc_target(nfcdevice):
         if self.get_handle_parity():
             return (a, b, None)
         return (a, b, c)
-    
+
     def receive_bytes(self):
         """Receives bytes as the tag"""
         return nfc.nfc_target_receive_bytes(self.pdi)
-    
+
     def send_bits(self, bits, inlen, par):
         """Send bits acting as a tag"""
         return nfc.nfc_target_send_bits(self.pdi, bits, inlen, par)
-    
+
     def send_bytes(self, inbytes):
         """Sends bytes acting as a tag"""
         return nfc.nfc_target_send_bytes(self.pdi, inbytes)
