@@ -147,7 +147,6 @@ class nfc_initiator(nfcdevice):
 
     def mifare_cmd(self, command, block, key = None, uid = None, data = None, value = None):
         """Sends MIFARE commands as an initiator"""
-        import binascii
         if command not in self._command_maps:
             raise TypeError("Command type " + type(command) + " not found")
         if block > 255 or block < 0:
