@@ -147,23 +147,27 @@ class nfc_initiator(nfcdevice):
 
     def mifare_cmd(self, command, block, key = None, uid = None, data = None, value = None):
         """Sends MIFARE commands as an initiator"""
+        import binascii
         if command not in self._command_maps:
             raise TypeError("Command type " + type(command) + " not found")
         if block > 255 or block < 0:
             raise TypeError("Value for block is too large")
         inbytes = chr(command) + chr(block)
         if command in [MC_AUTH_A, MC_AUTH_B]:
-            inbytes += key + uid
+            if key is not None and uid is not None:
+                inbytes += key + uid
         elif command in [MC_READ, MC_WRITE]:
-            inbytes += data
+            if data is not None:
+                inbytes += data
         elif command in [MC_DECREMENT, MC_INCREMENT, MC_TRANSFER, MC_STORE]:
-            inbytes += value
+            if value is not None:
+                inbytes += value
         else:
             raise RuntimeError("Should never reach this point!")
         res = self.transceive_bytes(inbytes)
         if res and command == MC_READ:
             return res
-        return res
+        return (res != False)
 
 class nfc_target(nfcdevice):
     """NFC Target (card/emulation) device"""
