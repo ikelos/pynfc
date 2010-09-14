@@ -162,7 +162,7 @@ class nfc_initiator(nfcdevice):
             raise RuntimeError("Should never reach this point!")
         res = self.transceive_bytes(inbytes)
         if res and command == MC_READ:
-            return parameter.mpd.get_data()
+            return res
         return res
 
 class nfc_target(nfcdevice):
