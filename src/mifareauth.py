@@ -30,6 +30,7 @@ print "Connect to reader:", nfc.connect()
 # Initialize the reader, or everything segfaults quite quickly
 print "Initialize Reader:", nfc.init()
 # Set tup the various connection fields
+print "Easy Framing False:", nfc.configure(pynfc.NDO_EASY_FRAMING, False)
 print "Field Down:", nfc.configure(pynfc.NDO_ACTIVATE_FIELD, False)
 print "CRC False:", nfc.configure(pynfc.NDO_HANDLE_CRC, False)
 print "Parity True:", nfc.configure(pynfc.NDO_HANDLE_PARITY, True)
@@ -39,11 +40,11 @@ print "Field Up:", nfc.configure(pynfc.NDO_ACTIVATE_FIELD, True)
 init = nfc.transceive_bits("\x26", 7)
 if (not init):
     raise RuntimeError("Failed to initialize reader")
-  
+
 # Create a Crypto1 object, set the key  
 crypto1 = pycrypto1.Crypto1()
 crypto1.set_key(0xA0A1A2A3A4A5)
-    
+
 # Since we're using transceive_bytes,  
 nfc.configure(pynfc.NDO_HANDLE_PARITY, True)
 msg = "\x93\x20"
@@ -65,7 +66,7 @@ msg = "\x60\x00" + py14443a.crc("\x60\x00")
 nfc.configure(pynfc.NDO_HANDLE_PARITY, False)
 print "R -> T:", hex_dump(msg)
 authresp = nfc.transceive_bits(msg, 32, py14443a.parity(msg))
-    
+
 if not authresp:
     raise RuntimeError("Failed during authentication request")
 
@@ -77,13 +78,13 @@ RR_l = crypto1.prng_next(TN_l, 64)
 # Input the UID xor TN for the first state
 # Since we're not doing nested auth, we don't care about the output    
 crypto1.get_word(U_l ^ TN_l, 1)
-    
+
 # Set an arbitrary RC (next of TN), this can probably be anything
 # Then generate the next states for crypto1
 RC_l = crypto1.prng_next(TN_l, 32)
 RC_x = crypto1.get_word(RC_l, 1)
 RR_x = crypto1.get_word(0, 1)
-            
+
 # Calculate this now, because we'll need the first bit for sending our response
 TR_x = crypto1.get_word(0, 1)
 
@@ -100,8 +101,8 @@ if not authresp2:
     raise RuntimeError("Failed to authenticate, check the key is correct")
 
 TR, bits, TR_par = authresp2
-print "T -> R:", hex_dump(TR) 
-print "TR == Next(TN, 96):", (pycrypto1.bytes_to_long(TR) ^ TR_x) == crypto1.prng_next(TN_l, 96)  
+print "T -> R:", hex_dump(TR)
+print "TR == Next(TN, 96):", (pycrypto1.bytes_to_long(TR) ^ TR_x) == crypto1.prng_next(TN_l, 96)
 
 ks1 = crypto1.get_word(0, 1)
 ks2 = crypto1.get_word(0, 1)
@@ -120,4 +121,4 @@ if not res:
     raise RuntimeError("Failed to transceive for some reason")
 
 (data, bits, par) = res
-print "T -> R:", hex_dump(pycrypto1.long_to_bytes(pycrypto1.bytes_to_long(data[:4]) ^ ks2)) 
+print "T -> R:", hex_dump(pycrypto1.long_to_bytes(pycrypto1.bytes_to_long(data[:4]) ^ ks2))
