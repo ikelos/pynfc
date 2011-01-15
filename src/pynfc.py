@@ -38,13 +38,11 @@ MC_DECREMENT = 0xC0
 MC_INCREMENT = 0xC1
 MC_STORE = 0xC2
 
-NM_ISO14443A_106 = nfc.NM_ISO14443A_106
-NM_FELICA_212 = nfc.NM_FELICA_212
-NM_FELICA_424 = nfc.NM_FELICA_424
-NM_ISO14443B_106 = nfc.NM_ISO14443B_106
-NM_JEWEL_106 = nfc.NM_JEWEL_106
-NM_ACTIVE_DEP = nfc.NM_ACTIVE_DEP
-NM_PASSIVE_DEP = nfc.NM_PASSIVE_DEP
+NMT_ISO14443A = nfc.NMT_ISO14443A
+NMT_ISO14443B = nfc.NMT_ISO14443B
+NMT_FELICA = nfc.NMT_FELICA
+NMT_JEWEL = nfc.NMT_JEWEL
+NMT_DEP = nfc.NMT_DEP
 
 class nfcdevice(object):
     """Standard NFC device"""
@@ -117,12 +115,12 @@ class nfc_initiator(nfcdevice):
         tag_info = nfc.nfc_target_info_t()
         res = nfc.nfc_initiator_select_passive_target(self.pdi, modulation, data, tag_info)
         if res:
-            if modulation == NM_ISO14443A_106:
+            if modulation == NMT_ISO14443A:
                 return {'atqa': tag_info.nai.get_atqa(),
                         'sak': tag_info.nai.get_sak(),
                         'uid': tag_info.nai.get_uid(),
                         'ats': tag_info.nai.get_ats()}
-            elif modulation in [NM_ACTIVE_DEP, NM_FELICA_212, NM_FELICA_424, NM_ISO14443B_106, NM_JEWEL_106, NM_PASSIVE_DEP]:
+            elif modulation in [NMT_DEP, NMT_FELICA, NMT_FELICA, NMT_ISO14443B, NMT_JEWEL]:
                 # raise NotImplementedError("The tag_information for these devices is not yet implemented")
                 return ()
         return None
