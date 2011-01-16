@@ -17,24 +17,28 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import pynfc, pycrypto1, py14443a
+import pynfc, pycrypto1, py14443a, sys
 
 def hex_dump(string):
     """Dumps data as hexstrings"""
     return ' '.join(["%0.2X" % ord(x) for x in string])
 
 ### NFC device setup
-nfc = pynfc.nfc_initiator()
+devs = pynfc.list_devices()
+if not devs:
+    print "No readers found"
+    sys.exit(1)
+dev = devs[0]
 # Connect to the reader
-print "Connect to reader:", nfc.connect()
-# Initialize the reader, or everything segfaults quite quickly
-print "Initialize Reader:", nfc.init()
+print "Connect to reader:",
+nfc = dev.connect(target = False)
+print bool(nfc)
 # Set tup the various connection fields
-print "Easy Framing False:", nfc.configure(pynfc.NDO_EASY_FRAMING, False)
-print "Field Down:", nfc.configure(pynfc.NDO_ACTIVATE_FIELD, False)
-print "CRC False:", nfc.configure(pynfc.NDO_HANDLE_CRC, False)
-print "Parity True:", nfc.configure(pynfc.NDO_HANDLE_PARITY, True)
-print "Field Up:", nfc.configure(pynfc.NDO_ACTIVATE_FIELD, True)
+print "Easy Framing False:", nfc.configure(nfc.NDO_EASY_FRAMING, False)
+print "Field Down:", nfc.configure(nfc.NDO_ACTIVATE_FIELD, False)
+print "CRC False:", nfc.configure(nfc.NDO_HANDLE_CRC, False)
+print "Parity True:", nfc.configure(nfc.NDO_HANDLE_PARITY, True)
+print "Field Up:", nfc.configure(nfc.NDO_ACTIVATE_FIELD, True)
 
 # Start the run with the tag
 init = nfc.transceive_bits("\x26", 7)
@@ -46,7 +50,7 @@ crypto1 = pycrypto1.Crypto1()
 crypto1.set_key(0xA0A1A2A3A4A5)
 
 # Since we're using transceive_bytes,  
-nfc.configure(pynfc.NDO_HANDLE_PARITY, True)
+nfc.configure(nfc.NDO_HANDLE_PARITY, True)
 msg = "\x93\x20"
 print "R -> T:", hex_dump(msg)
 uid = nfc.transceive_bytes(msg)
@@ -63,7 +67,7 @@ print "T -> R:", hex_dump(select)
 # We turn the parity handling OFF when sending our own
 # Our auth message is for key type A on block 4
 msg = "\x60\x00" + py14443a.crc("\x60\x00")
-nfc.configure(pynfc.NDO_HANDLE_PARITY, False)
+nfc.configure(nfc.NDO_HANDLE_PARITY, False)
 print "R -> T:", hex_dump(msg)
 authresp = nfc.transceive_bits(msg, 32, py14443a.parity(msg))
 

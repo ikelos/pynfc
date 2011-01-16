@@ -25,7 +25,11 @@ class DeviceDescription(ctypes.Structure):
                 ("bus_index", ctypes.c_uint32)
                 ]
 
-    def connect(self):
+    def connect(self, target = None):
+        if target == False:
+            return NfcInitiator(self)
+        if target == True:
+            return NfcTarget(self)
         return NfcDevice(self)
 
 class ChipCallbacks(ctypes.Structure):
@@ -138,6 +142,30 @@ _lib.nfc_initiator_select_passive_target.restype = ctypes.c_bool
 _lib.nfc_initiator_list_passive_targets.argtypes = (ctypes.POINTER(_Device), Modulation, ctypes.POINTER(Target), _size_t, ctypes.POINTER(_size_t))
 _lib.nfc_initiator_list_passive_targets.restype = ctypes.c_bool
 
+_lib.nfc_initiator_select_dep_target.argtypes = (ctypes.POINTER(_Device), _enum_val, _enum_val, ctypes.POINTER(InfoDep), ctypes.POINTER(Target))
+_lib.nfc_initiator_select_passive_target.restype = ctypes.c_bool
+
+_lib.nfc_initiator_deselect_target.argtypes = (ctypes.POINTER(_Device),)
+_lib.nfc_initiator_deselect_target.restype = ctypes.c_bool
+
+_lib.nfc_initiator_transceive_bytes.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t))
+_lib.nfc_initiator_transceive_bytes.restype = ctypes.c_bool
+
+_lib.nfc_initiator_transceive_bits.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t))
+_lib.nfc_initiator_transceive_bits.restype = ctypes.c_bool
+
+_lib.nfc_strerror.argtypes = (ctypes.POINTER(_Device),)
+_lib.nfc_strerror.restype = ctypes.c_char_p
+
+_lib.nfc_target_init.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(Target), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t))
+_lib.nfc_target_init.restype = ctypes.c_bool
+
+_lib.nfc_target_receive_bits.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t))
+_lib.nfc_target_receive_bits.restype = ctypes.c_bool
+
+_lib.nfc_target_receive_bytes.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t))
+_lib.nfc_target_receive_bytes.restype = ctypes.c_bool
+
 def get_version():
     res = _lib.nfc_version()
     print res
@@ -181,16 +209,22 @@ class NfcDevice(object):
     NDM_PASSIVE = 0x01
     NDM_ACTIVE = 0x02
 
+    MAX_FRAME_LEN = 264
+
     def __init__(self, devdesc = None):
         self._device = _lib.nfc_connect(ctypes.byref(devdesc))
+        self._txbytes = (_byte_t * self.MAX_FRAME_LEN)()
+        self._txpbytes = (_byte_t * self.MAX_FRAME_LEN)()
+        self._rxbytes = (_byte_t * self.MAX_FRAME_LEN)()
+        self._rxpbytes = (_byte_t * self.MAX_FRAME_LEN)()
 
-    def check_enum(self, prefix, value):
+    def _check_enum(self, prefix, value):
         if value not in [ getattr(self, i) for i in dir(self) if i.startswith(prefix)]:
             raise AttributeError("Failed to locate appropriate configuration option")
 
     def configure(self, option, value):
         """Configures the NFC device options"""
-        self.check_enum('NDO', option)
+        self._check_enum('NDO', option)
         return _lib.nfc_configure(self._device, option, value)
 
     def initiator_init(self):
@@ -199,8 +233,8 @@ class NfcDevice(object):
 
     def initiator_select_passive_target(self, modtype, baudrate, initdata = None):
         """Selects a passive target"""
-        self.check_enum('NMT', modtype)
-        self.check_enum('NBR', baudrate)
+        self._check_enum('NMT', modtype)
+        self._check_enum('NBR', baudrate)
 
         mod = Modulation(nmt = modtype, nbr = baudrate)
 
@@ -220,8 +254,8 @@ class NfcDevice(object):
 
     def initiator_list_passive_targets(self, modtype, baudrate):
         """Lists all available passive targets"""
-        self.check_enum('NMT', modtype)
-        self.check_enum('NBR', baudrate)
+        self._check_enum('NMT', modtype)
+        self._check_enum('NBR', baudrate)
 
         mod = Modulation(nmt = modtype, nbr = baudrate)
 
@@ -240,6 +274,224 @@ class NfcDevice(object):
         for i in range(min(num_targets.value, max_targets_length)):
             result.append(targets[i])
         return result
+
+    def initiator_deselect_target(self):
+        """Deselects any selected target"""
+        return _lib.nfc_initiator_deselect_target(self._device)
+
+    def initiator_select_dep_target(self, depmode, baudrate, depinfo):
+        """Selects a dep target"""
+        self._check_enum('NDM', depmode)
+        self._check_enum('NBR', baudrate)
+
+        if not depinfo:
+            data = None
+        else:
+            data = ctypes.byref(depinfo)
+
+        target = Target()
+        _lib.nfc_initiator_select_passive_target(self._device,
+                                                 depmode,
+                                                 baudrate,
+                                                 data,
+                                                 ctypes.byref(target))
+        return target
+
+    def initiator_poll_targets(self, targetlist, pollnum, period):
+
+        targtypes = Modulation * len(targetlist)
+        for i in range(len(targetlist)):
+            targtypes[i] = targetlist[i]
+
+        max_targets_length = 16
+        Targets = Target * max_targets_length
+        targets = Targets()
+        num_targets = _size_t(0)
+        _lib.nfc_initiator_poll_targets(self._device, ctypes.byref(targtypes),
+                                        _size_t(len(targetlist)),
+                                        _byte_t(pollnum),
+                                        _byte_t(period),
+                                        ctypes.byref(targets),
+                                        ctypes.byref(num_targets))
+        result = []
+        for i in range(min(num_targets.value, max_targets_length)):
+            result.append(targets[i])
+        return result
+
+    def initiator_transceive_bits(self, bits, numbits, paritybits = None):
+        """Sends a series of bits, returning the number and bits sent back by the target"""
+        if paritybits and len(paritybits) != len(bits):
+            raise ValueError("Length of parity bits does not match length of bits")
+        if len(bits) < ((numbits + 7) / 8):
+            raise ValueError("Length of bits does not match the value passed in numbits")
+
+        insize = min(((numbits + 7) / 8), self.MAX_FRAME_LEN)
+        for i in range(insize):
+            self._txbytes[i].value = bits[i]
+            if paritybits:
+                self._txpbytes[i].value = paritybits[i] & 0x01
+
+        parity = None
+        if paritybits:
+            parity = ctypes.byref(self._txpbytes)
+
+        rxbitlen = _size_t(0)
+
+        result = _lib.initiator_transceive_bits(self._device,
+                                                ctypes.byref(self._txbytes),
+                                                ctypes.byref(_size_t(numbits)),
+                                                parity,
+                                                ctypes.byref(self._rxbytes),
+                                                ctypes.byref(rxbitlen),
+                                                ctypes.byref(self._rxpbytes))
+        if not result:
+            return None
+
+        rxbytes = rxpbytes = ""
+        for i in range(min(((rxbitlen.value + 7) / 8), self.MAX_FRAME_LEN)):
+            rxbytes += chr(self._rxbytes[i].value)
+            rxpbytes += chr(self._rxpbytes[i].value)
+
+        return rxbitlen.value, rxbytes, rxpbytes
+
+
+    def initiator_transceive_bytes(self, inbytes):
+        """Sends a series of bytes, returning those bytes sent back by the target"""
+        insize = min(len(inbytes), self.MAX_FRAME_LEN)
+        for i in range(insize):
+            self._txbytes[i].value = inbytes[i]
+
+        rxbytelen = _size_t(0)
+
+        result = _lib.initiator_transceive_bits(self._device,
+                                                ctypes.byref(self._txbytes),
+                                                ctypes.byref(_size_t(insize)),
+                                                ctypes.byref(self._rxbytes),
+                                                ctypes.byref(rxbytelen))
+        if not result:
+            return None
+
+        result = ""
+        for i in range(min(rxbytelen.value, self.MAX_FRAME_LEN)):
+            result += chr(self._rxbytes[i].value)
+
+        return result
+
+    def get_error(self):
+        """Returns an error description for any error that may have occurred from the previous command"""
+        return _lib.nfc_strerror(self._device)
+
+    def target_init(self, targettype):
+        """Initializes the device as a target"""
+        rxsize = _size_t(0)
+        return _lib.nfc_target_init(self._device, targettype, self._rxbytes, ctypes.byref(rxsize))
+
+    def target_receive_bits(self):
+        """Receives bits and parity bits from a device in target mode"""
+        rxsize = _size_t(0)
+        result = _lib.nfc_target_recieve_bits(self._device, ctypes.byref(self._rxbytes), ctypes.byref(rxsize), ctypes.byref(self._rxpbytes))
+
+        if not result:
+            return None
+
+        rxbytes = rxpbytes = ""
+        for i in range(min(((rxsize.value + 7) / 8), self.MAX_FRAME_LEN)):
+            rxbytes += chr(self._rxbytes[i].value)
+            rxpbytes += chr(self._rxpbytes[i].value)
+
+        return rxsize.value, rxbytes, rxpbytes
+
+    def target_receive_bytes(self):
+        """Receives bytes from a device in target mode"""
+        rxsize = _size_t(0)
+        result = _lib.nfc_target_recieve_bytes(self._device,
+                                               ctypes.byref(self._rxbytes),
+                                               ctypes.byref(rxsize))
+
+        if not result:
+            return None
+
+        result = ""
+        for i in range(rxsize.value):
+            result += chr(self._rxbytes[i].value)
+        return result
+
+    def target_send_bits(self, bits, numbits, paritybits = None):
+        """Sends bits and paritybits in target mode"""
+        if paritybits and len(paritybits) != len(bits):
+            raise ValueError("Length of parity bits does not match length of bits")
+        if len(bits) < ((numbits + 7) / 8):
+            raise ValueError("Length of bits does not match the value passed in numbits")
+
+        insize = min(((numbits + 7) / 8), self.MAX_FRAME_LEN)
+        for i in range(insize):
+            self._txbytes[i].value = bits[i]
+            if paritybits:
+                self._txpbytes[i].value = paritybits[i] & 0x01
+
+        parity = None
+        if paritybits:
+            parity = ctypes.byref(self._txpbytes)
+
+        return _lib.nfc_target_send_bits(self._device,
+                                         ctypes.byref(self._txbytes),
+                                         ctypes.byref(_size_t(numbits)),
+                                         parity)
+
+    def target_send_bytes(self, inbytes):
+        """Sends bytes in target mode"""
+        insize = min(len(inbytes), self.MAX_FRAME_LEN)
+        for i in range(insize):
+            self._txbytes[i].value = inbytes[i]
+
+        return _lib.nfc_target_send_bytes(self._device,
+                                          ctypes.byref(self._txbytes),
+                                          ctypes.byref(_size_t(insize)))
+
+class NfcTarget(NfcDevice):
+
+    def __init__(self, devdesc, targettype, *args, **kwargs):
+        NfcDevice.__init__(self, devdesc, *args, **kwargs)
+        self.target_init(targettype)
+
+    def receive_bits(self, *args, **kwargs):
+        return self.target_receive_bits(*args, **kwargs)
+
+    def receive_bytes(self, *args, **kwargs):
+        return self.target_receive_bytes(*args, **kwargs)
+
+    def send_bits(self, *args, **kwargs):
+        return self.target_send_bits(*args, **kwargs)
+
+    def send_bytes(self, *args, **kwargs):
+        return self.target_send_bytes(*args, **kwargs)
+
+class NfcInitiator(NfcDevice):
+
+    def __init__(self, *args, **kwargs):
+        NfcDevice.__init__(self, *args, **kwargs)
+        self.initiator_init()
+
+    def select_passive_target(self, *args, **kwargs):
+        return self.initiator_select_passive_target(*args, **kwargs)
+
+    def list_passive_targets(self, *args, **kwargs):
+        return self.initiator_list_passive_targets(*args, **kwargs)
+
+    def deselect_target(self, *args, **kwargs):
+        return self.initiator_deselect_target(*args, **kwargs)
+
+    def select_dep_target(self, *args, **kwargs):
+        return self.initiator_select_dep_target(*args, **kwargs)
+
+    def poll_targets(self, *args, **kwargs):
+        return self.initiator_poll_targets(*args, **kwargs)
+
+    def transceive_bits(self, *args, **kwargs):
+        return self.initiator_transceive_bits(*args, **kwargs)
+
+    def transceive_bytes(self, *args, **kwargs):
+        return self.initiator_transceive_bytes(*args, **kwargs)
 
 if __name__ == '__main__':
     devs = list_devices()
