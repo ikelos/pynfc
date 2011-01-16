@@ -10,6 +10,7 @@ import ctypes.util
 _lib = ctypes.CDLL(ctypes.util.find_library('nfc'))
 
 DEVICE_NAME_LENGTH = 256
+MAX_FRAME_LEN = 264
 
 (NC_PN531, NC_PN532, NC_PN533) = (0x10, 0x20, 0x30)
 
@@ -122,7 +123,9 @@ class _Device(ctypes.Structure):
 
 _lib.nfc_version.restype = ctypes.c_char_p
 
-_lib.nfc_list_devices.argtypes = (ctypes.POINTER(DeviceDescription), _size_t, ctypes.POINTER(_size_t))
+_lib.nfc_list_devices.argtypes = (ctypes.POINTER(DeviceDescription),
+                                  _size_t,
+                                  ctypes.POINTER(_size_t))
 
 _lib.nfc_connect.argtypes = (ctypes.POINTER(DeviceDescription),)
 _lib.nfc_connect.restype = ctypes.POINTER(_Device)
@@ -130,41 +133,84 @@ _lib.nfc_connect.restype = ctypes.POINTER(_Device)
 _lib.nfc_disconnect.argtypes = (ctypes.POINTER(DeviceDescription),)
 _lib.nfc_disconnect.restype = None
 
-_lib.nfc_configure.argtypes = (ctypes.POINTER(_Device), _enum_val, ctypes.c_bool)
+_lib.nfc_configure.argtypes = (ctypes.POINTER(_Device),
+                               _enum_val,
+                               ctypes.c_bool)
 _lib.nfc_configure.restype = ctypes.c_bool
 
 _lib.nfc_initiator_init.argtypes = (ctypes.POINTER(_Device),)
 _lib.nfc_initiator_init.restype = ctypes.c_bool
 
-_lib.nfc_initiator_select_passive_target.argtypes = (ctypes.POINTER(_Device), Modulation, ctypes.POINTER(_byte_t), _size_t, ctypes.POINTER(Target))
+_lib.nfc_initiator_select_passive_target.argtypes = (ctypes.POINTER(_Device),
+                                                     Modulation,
+                                                     ctypes.POINTER(_byte_t),
+                                                     _size_t,
+                                                     ctypes.POINTER(Target))
 _lib.nfc_initiator_select_passive_target.restype = ctypes.c_bool
 
-_lib.nfc_initiator_list_passive_targets.argtypes = (ctypes.POINTER(_Device), Modulation, ctypes.POINTER(Target), _size_t, ctypes.POINTER(_size_t))
+_lib.nfc_initiator_list_passive_targets.argtypes = (ctypes.POINTER(_Device),
+                                                    Modulation,
+                                                    ctypes.POINTER(Target),
+                                                    _size_t,
+                                                    ctypes.POINTER(_size_t))
 _lib.nfc_initiator_list_passive_targets.restype = ctypes.c_bool
 
-_lib.nfc_initiator_select_dep_target.argtypes = (ctypes.POINTER(_Device), _enum_val, _enum_val, ctypes.POINTER(InfoDep), ctypes.POINTER(Target))
+_lib.nfc_initiator_select_dep_target.argtypes = (ctypes.POINTER(_Device),
+                                                 _enum_val,
+                                                 _enum_val,
+                                                 ctypes.POINTER(InfoDep),
+                                                 ctypes.POINTER(Target))
 _lib.nfc_initiator_select_passive_target.restype = ctypes.c_bool
 
 _lib.nfc_initiator_deselect_target.argtypes = (ctypes.POINTER(_Device),)
 _lib.nfc_initiator_deselect_target.restype = ctypes.c_bool
 
-_lib.nfc_initiator_transceive_bytes.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t))
+_lib.nfc_initiator_transceive_bytes.argtypes = (ctypes.POINTER(_Device),
+                                                ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                                _size_t,
+                                                ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                                ctypes.POINTER(_size_t))
 _lib.nfc_initiator_transceive_bytes.restype = ctypes.c_bool
 
-_lib.nfc_initiator_transceive_bits.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t))
+_lib.nfc_initiator_transceive_bits.argtypes = (ctypes.POINTER(_Device),
+                                               ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                               _size_t,
+                                               ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                               ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                               ctypes.POINTER(_size_t),
+                                               ctypes.POINTER(_byte_t * MAX_FRAME_LEN))
 _lib.nfc_initiator_transceive_bits.restype = ctypes.c_bool
 
 _lib.nfc_strerror.argtypes = (ctypes.POINTER(_Device),)
 _lib.nfc_strerror.restype = ctypes.c_char_p
 
-_lib.nfc_target_init.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(Target), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t))
+_lib.nfc_target_init.argtypes = (ctypes.POINTER(_Device),
+                                 ctypes.POINTER(Target),
+                                 ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                 ctypes.POINTER(_size_t))
 _lib.nfc_target_init.restype = ctypes.c_bool
 
-_lib.nfc_target_receive_bits.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t), ctypes.POINTER(_byte_t))
+_lib.nfc_target_receive_bits.argtypes = (ctypes.POINTER(_Device),
+                                         ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                         ctypes.POINTER(_size_t),
+                                         ctypes.POINTER(_byte_t * MAX_FRAME_LEN))
 _lib.nfc_target_receive_bits.restype = ctypes.c_bool
 
-_lib.nfc_target_receive_bytes.argtypes = (ctypes.POINTER(_Device), ctypes.POINTER(_byte_t), ctypes.POINTER(_size_t))
+_lib.nfc_target_receive_bytes.argtypes = (ctypes.POINTER(_Device),
+                                          ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                          ctypes.POINTER(_size_t))
 _lib.nfc_target_receive_bytes.restype = ctypes.c_bool
+
+_lib.nfc_target_send_bits.argtypes = (ctypes.POINTER(_Device),
+                                      ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                      _size_t,
+                                      ctypes.POINTER(_byte_t * MAX_FRAME_LEN))
+_lib.nfc_target_send_bits.restype = ctypes.c_bool
+
+_lib.nfc_target_send_bytes.argtypes = (ctypes.POINTER(_Device),
+                                       ctypes.POINTER(_byte_t * MAX_FRAME_LEN),
+                                       _size_t)
+_lib.nfc_target_send_bytes.restype = ctypes.c_bool
 
 def get_version():
     res = _lib.nfc_version()
@@ -209,14 +255,12 @@ class NfcDevice(object):
     NDM_PASSIVE = 0x01
     NDM_ACTIVE = 0x02
 
-    MAX_FRAME_LEN = 264
-
     def __init__(self, devdesc = None):
         self._device = _lib.nfc_connect(ctypes.byref(devdesc))
-        self._txbytes = (_byte_t * self.MAX_FRAME_LEN)()
-        self._txpbytes = (_byte_t * self.MAX_FRAME_LEN)()
-        self._rxbytes = (_byte_t * self.MAX_FRAME_LEN)()
-        self._rxpbytes = (_byte_t * self.MAX_FRAME_LEN)()
+        self._txbytes = (_byte_t * MAX_FRAME_LEN)()
+        self._txpbytes = (_byte_t * MAX_FRAME_LEN)()
+        self._rxbytes = (_byte_t * MAX_FRAME_LEN)()
+        self._rxpbytes = (_byte_t * MAX_FRAME_LEN)()
 
     def _check_enum(self, prefix, value):
         if value not in [ getattr(self, i) for i in dir(self) if i.startswith(prefix)]:
@@ -325,55 +369,55 @@ class NfcDevice(object):
         if len(bits) < ((numbits + 7) / 8):
             raise ValueError("Length of bits does not match the value passed in numbits")
 
-        insize = min(((numbits + 7) / 8), self.MAX_FRAME_LEN)
+        insize = min(((numbits + 7) / 8), MAX_FRAME_LEN)
         for i in range(insize):
-            self._txbytes[i].value = bits[i]
+            self._txbytes[i] = ord(bits[i])
             if paritybits:
-                self._txpbytes[i].value = paritybits[i] & 0x01
+                self._txpbytes[i] = ord(paritybits[i]) & 0x01
 
         parity = None
         if paritybits:
-            parity = ctypes.byref(self._txpbytes)
+            parity = ctypes.pointer(self._txpbytes)
 
         rxbitlen = _size_t(0)
 
-        result = _lib.initiator_transceive_bits(self._device,
-                                                ctypes.byref(self._txbytes),
-                                                ctypes.byref(_size_t(numbits)),
-                                                parity,
-                                                ctypes.byref(self._rxbytes),
-                                                ctypes.byref(rxbitlen),
-                                                ctypes.byref(self._rxpbytes))
+        result = _lib.nfc_initiator_transceive_bits(self._device,
+                                                    ctypes.pointer(self._txbytes),
+                                                    _size_t(numbits),
+                                                    parity,
+                                                    ctypes.pointer(self._rxbytes),
+                                                    ctypes.byref(rxbitlen),
+                                                    ctypes.pointer(self._rxpbytes))
         if not result:
             return None
 
         rxbytes = rxpbytes = ""
-        for i in range(min(((rxbitlen.value + 7) / 8), self.MAX_FRAME_LEN)):
-            rxbytes += chr(self._rxbytes[i].value)
-            rxpbytes += chr(self._rxpbytes[i].value)
+        for i in range(min(((rxbitlen.value + 7) / 8), MAX_FRAME_LEN)):
+            rxbytes += chr(self._rxbytes[i])
+            rxpbytes += chr(self._rxpbytes[i])
 
         return rxbitlen.value, rxbytes, rxpbytes
 
 
     def initiator_transceive_bytes(self, inbytes):
         """Sends a series of bytes, returning those bytes sent back by the target"""
-        insize = min(len(inbytes), self.MAX_FRAME_LEN)
+        insize = min(len(inbytes), MAX_FRAME_LEN)
         for i in range(insize):
-            self._txbytes[i].value = inbytes[i]
+            self._txbytes[i] = ord(inbytes[i])
 
         rxbytelen = _size_t(0)
 
-        result = _lib.initiator_transceive_bits(self._device,
-                                                ctypes.byref(self._txbytes),
-                                                ctypes.byref(_size_t(insize)),
-                                                ctypes.byref(self._rxbytes),
-                                                ctypes.byref(rxbytelen))
+        result = _lib.nfc_initiator_transceive_bytes(self._device,
+                                                     ctypes.byref(self._txbytes),
+                                                     _size_t(insize),
+                                                     ctypes.byref(self._rxbytes),
+                                                     ctypes.byref(rxbytelen))
         if not result:
             return None
 
         result = ""
-        for i in range(min(rxbytelen.value, self.MAX_FRAME_LEN)):
-            result += chr(self._rxbytes[i].value)
+        for i in range(min(rxbytelen.value, MAX_FRAME_LEN)):
+            result += chr(self._rxbytes[i])
 
         return result
 
@@ -395,9 +439,9 @@ class NfcDevice(object):
             return None
 
         rxbytes = rxpbytes = ""
-        for i in range(min(((rxsize.value + 7) / 8), self.MAX_FRAME_LEN)):
-            rxbytes += chr(self._rxbytes[i].value)
-            rxpbytes += chr(self._rxpbytes[i].value)
+        for i in range(min(((rxsize.value + 7) / 8), MAX_FRAME_LEN)):
+            rxbytes += chr(self._rxbytes[i])
+            rxpbytes += chr(self._rxpbytes[i])
 
         return rxsize.value, rxbytes, rxpbytes
 
@@ -413,7 +457,7 @@ class NfcDevice(object):
 
         result = ""
         for i in range(rxsize.value):
-            result += chr(self._rxbytes[i].value)
+            result += chr(self._rxbytes[i])
         return result
 
     def target_send_bits(self, bits, numbits, paritybits = None):
@@ -423,7 +467,7 @@ class NfcDevice(object):
         if len(bits) < ((numbits + 7) / 8):
             raise ValueError("Length of bits does not match the value passed in numbits")
 
-        insize = min(((numbits + 7) / 8), self.MAX_FRAME_LEN)
+        insize = min(((numbits + 7) / 8), MAX_FRAME_LEN)
         for i in range(insize):
             self._txbytes[i].value = bits[i]
             if paritybits:
@@ -435,18 +479,18 @@ class NfcDevice(object):
 
         return _lib.nfc_target_send_bits(self._device,
                                          ctypes.byref(self._txbytes),
-                                         ctypes.byref(_size_t(numbits)),
+                                         _size_t(numbits),
                                          parity)
 
     def target_send_bytes(self, inbytes):
         """Sends bytes in target mode"""
-        insize = min(len(inbytes), self.MAX_FRAME_LEN)
+        insize = min(len(inbytes), MAX_FRAME_LEN)
         for i in range(insize):
             self._txbytes[i].value = inbytes[i]
 
         return _lib.nfc_target_send_bytes(self._device,
                                           ctypes.byref(self._txbytes),
-                                          ctypes.byref(_size_t(insize)))
+                                          _size_t(insize))
 
 class NfcTarget(NfcDevice):
 
