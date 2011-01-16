@@ -257,6 +257,8 @@ class NfcDevice(object):
 
     def __init__(self, devdesc = None):
         self._device = _lib.nfc_connect(ctypes.byref(devdesc))
+
+        # Create the buffers so that we don't have to inefficiently recreate them each call
         self._txbytes = (_byte_t * MAX_FRAME_LEN)()
         self._txpbytes = (_byte_t * MAX_FRAME_LEN)()
         self._rxbytes = (_byte_t * MAX_FRAME_LEN)()
@@ -396,7 +398,7 @@ class NfcDevice(object):
             rxbytes += chr(self._rxbytes[i])
             rxpbytes += chr(self._rxpbytes[i])
 
-        return rxbitlen.value, rxbytes, rxpbytes
+        return rxbytes, rxbitlen.value, rxpbytes
 
 
     def initiator_transceive_bytes(self, inbytes):
@@ -428,12 +430,18 @@ class NfcDevice(object):
     def target_init(self, targettype):
         """Initializes the device as a target"""
         rxsize = _size_t(0)
-        return _lib.nfc_target_init(self._device, targettype, self._rxbytes, ctypes.byref(rxsize))
+        return _lib.nfc_target_init(self._device,
+                                    targettype,
+                                    self._rxbytes,
+                                    ctypes.byref(rxsize))
 
     def target_receive_bits(self):
         """Receives bits and parity bits from a device in target mode"""
         rxsize = _size_t(0)
-        result = _lib.nfc_target_recieve_bits(self._device, ctypes.byref(self._rxbytes), ctypes.byref(rxsize), ctypes.byref(self._rxpbytes))
+        result = _lib.nfc_target_recieve_bits(self._device,
+                                              ctypes.byref(self._rxbytes),
+                                              ctypes.byref(rxsize),
+                                              ctypes.byref(self._rxpbytes))
 
         if not result:
             return None
@@ -443,7 +451,7 @@ class NfcDevice(object):
             rxbytes += chr(self._rxbytes[i])
             rxpbytes += chr(self._rxpbytes[i])
 
-        return rxsize.value, rxbytes, rxpbytes
+        return rxbytes, rxsize.value, rxpbytes
 
     def target_receive_bytes(self):
         """Receives bytes from a device in target mode"""
