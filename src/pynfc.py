@@ -427,9 +427,13 @@ class NfcDevice(object):
         """Returns an error description for any error that may have occurred from the previous command"""
         return _lib.nfc_strerror(self._device)
 
-    def target_init(self, targettype):
+    def target_init(self, targettype = None):
         """Initializes the device as a target"""
         rxsize = _size_t(0)
+
+        if targettype:
+            targettype = ctypes.byref(targettype)
+
         return _lib.nfc_target_init(self._device,
                                     targettype,
                                     self._rxbytes,
@@ -438,7 +442,7 @@ class NfcDevice(object):
     def target_receive_bits(self):
         """Receives bits and parity bits from a device in target mode"""
         rxsize = _size_t(0)
-        result = _lib.nfc_target_recieve_bits(self._device,
+        result = _lib.nfc_target_receive_bits(self._device,
                                               ctypes.byref(self._rxbytes),
                                               ctypes.byref(rxsize),
                                               ctypes.byref(self._rxpbytes))
@@ -456,7 +460,7 @@ class NfcDevice(object):
     def target_receive_bytes(self):
         """Receives bytes from a device in target mode"""
         rxsize = _size_t(0)
-        result = _lib.nfc_target_recieve_bytes(self._device,
+        result = _lib.nfc_target_receive_bytes(self._device,
                                                ctypes.byref(self._rxbytes),
                                                ctypes.byref(rxsize))
 
@@ -477,9 +481,9 @@ class NfcDevice(object):
 
         insize = min(((numbits + 7) / 8), MAX_FRAME_LEN)
         for i in range(insize):
-            self._txbytes[i].value = bits[i]
+            self._txbytes[i] = ord(bits[i])
             if paritybits:
-                self._txpbytes[i].value = paritybits[i] & 0x01
+                self._txpbytes[i] = ord(paritybits[i]) & 0x01
 
         parity = None
         if paritybits:
@@ -494,7 +498,7 @@ class NfcDevice(object):
         """Sends bytes in target mode"""
         insize = min(len(inbytes), MAX_FRAME_LEN)
         for i in range(insize):
-            self._txbytes[i].value = inbytes[i]
+            self._txbytes[i] = ord(inbytes[i])
 
         return _lib.nfc_target_send_bytes(self._device,
                                           ctypes.byref(self._txbytes),
@@ -502,9 +506,12 @@ class NfcDevice(object):
 
 class NfcTarget(NfcDevice):
 
-    def __init__(self, devdesc, targettype, *args, **kwargs):
+    def __init__(self, devdesc, targettype = None, *args, **kwargs):
         NfcDevice.__init__(self, devdesc, *args, **kwargs)
-        self.target_init(targettype)
+        self.init(targettype)
+
+    def init(self, *args, **kwargs):
+        return self.target_init(*args, **kwargs)
 
     def receive_bits(self, *args, **kwargs):
         return self.target_receive_bits(*args, **kwargs)
@@ -522,7 +529,10 @@ class NfcInitiator(NfcDevice):
 
     def __init__(self, *args, **kwargs):
         NfcDevice.__init__(self, *args, **kwargs)
-        self.initiator_init()
+        self.init()
+
+    def init(self, *args, **kwargs):
+        return self.initiator_init(*args, **kwargs)
 
     def select_passive_target(self, *args, **kwargs):
         return self.initiator_select_passive_target(*args, **kwargs)
