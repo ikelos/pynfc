@@ -19,6 +19,7 @@ _size_t = ctypes.c_uint32
 _enum_val = ctypes.c_int
 
 class DeviceDescription(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("device", ctypes.c_char * DEVICE_NAME_LENGTH),
                 ("driver", ctypes.c_char_p),
                 ("port", ctypes.c_char_p),
@@ -34,10 +35,12 @@ class DeviceDescription(ctypes.Structure):
         return NfcDevice(self)
 
 class ChipCallbacks(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("strerror", ctypes.POINTER(None))
                 ]
 
 class InfoIso14443A(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("atqa", _byte_t * 2),
                 ("sak", _byte_t),
                 ("uidlen", _size_t),
@@ -47,6 +50,7 @@ class InfoIso14443A(ctypes.Structure):
                 ]
 
 class InfoFelicia(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("len", _size_t),
                 ("res_code", _byte_t),
                 ("id", _byte_t * 8),
@@ -55,6 +59,7 @@ class InfoFelicia(ctypes.Structure):
                 ]
 
 class InfoIso14443B(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("pupi", _byte_t * 4),
                 ("application_data", _byte_t * 4),
                 ("protocol_info", _byte_t * 3),
@@ -62,11 +67,13 @@ class InfoIso14443B(ctypes.Structure):
                 ]
 
 class InfoJewel(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("sens_res", _byte_t * 2),
                 ("id", _byte_t * 4)
                 ]
 
 class InfoDep(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("nfcid3", _byte_t * 10),
                 ("did", _byte_t),
                 ("bs", _byte_t),
@@ -79,6 +86,7 @@ class InfoDep(ctypes.Structure):
                 ]
 
 class TargetInfo(ctypes.Union):
+    _pack_ = 1
     _fields_ = [("nai", InfoIso14443A),
                 ("nfi", InfoFelicia),
                 ("nbi", InfoIso14443B),
@@ -87,16 +95,19 @@ class TargetInfo(ctypes.Union):
                 ]
 
 class Modulation(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("nmt", _enum_val),
                 ("nbr", _enum_val)
                 ]
 
 class Target(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("nti", TargetInfo),
                 ("mm", Modulation)
                 ]
 
 class DriverCallbacks(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("driver", ctypes.c_char_p),
                 ("chip_callbacks", ctypes.POINTER(ChipCallbacks)),
                 ("pick_device", ctypes.POINTER(None)),
@@ -107,6 +118,7 @@ class DriverCallbacks(ctypes.Structure):
                 ]
 
 class _Device(ctypes.Structure):
+    _pack_ = 1
     _fields_ = [("pdc", ctypes.POINTER(DriverCallbacks)),
                 ("name", ctypes.c_char * DEVICE_NAME_LENGTH),
                 ("nc", _enum_val),
