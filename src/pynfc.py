@@ -348,11 +348,11 @@ class NfcDevice(object):
             data = ctypes.byref(depinfo)
 
         target = Target()
-        _lib.nfc_initiator_select_passive_target(self._device,
-                                                 depmode,
-                                                 baudrate,
-                                                 data,
-                                                 ctypes.byref(target))
+        _lib.nfc_initiator_select_dep_target(self._device,
+                                             depmode,
+                                             baudrate,
+                                             data,
+                                             ctypes.byref(target))
         return target
 
     def initiator_poll_targets(self, targetlist, pollnum, period):
