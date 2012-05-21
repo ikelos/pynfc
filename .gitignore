@@ -2,3 +2,4 @@
 *.so
 build
 nfc.py
+*.pyc
