@@ -15,7 +15,7 @@ MAX_FRAME_LEN = 264
 (NC_PN531, NC_PN532, NC_PN533) = (0x10, 0x20, 0x30)
 
 _byte_t = ctypes.c_ubyte
-_size_t = ctypes.c_uint32
+_size_t = ctypes.c_size_t
 _enum_val = ctypes.c_int
 
 class DeviceDescription(ctypes.Structure):
