@@ -23,11 +23,19 @@ from distutils.core import setup, Extension
 
 setup(
     name = "pynfc",
-    version = "0.0.6",
+    version = "0.0.7",
     description = "Python bindings for libnfc",
     author = "Mike Auty",
-    data_files = [('examples', ['mifareauth.py'])],
+	url='http://code.google.com/p/pynfc/',
+    data_files = [('examples/rfid/libnfc', ['examples/mifareauth.py', 'examples/dump.py', 'examples/keys-B7006691.py'])],
     license = "GPL-2",
-    py_modules = ['pynfc', 'pycrypto1', 'py14443a']
+	packages = [
+		'rfid', 
+		'rfid.libnfc', 
+		'rfid.libnfc.modulation', 
+		'rfid.libnfc.modulation.iso14443a', 
+		'rfid.libnfc.modulation.iso14443a.br106', 
+		'rfid.libnfc.modulation.iso14443a.br106.tags'
+	]
 )
 
