@@ -26,16 +26,16 @@ setup(
     version = "0.0.7",
     description = "Python bindings for libnfc",
     author = "Mike Auty",
-	url='http://code.google.com/p/pynfc/',
+    url='http://code.google.com/p/pynfc/',
     data_files = [('examples/rfid/libnfc', ['examples/mifareauth.py', 'examples/dump.py', 'examples/keys-B7006691.py'])],
     license = "GPL-2",
-	packages = [
-		'rfid', 
-		'rfid.libnfc', 
-		'rfid.libnfc.modulation', 
-		'rfid.libnfc.modulation.iso14443a', 
-		'rfid.libnfc.modulation.iso14443a.br106', 
-		'rfid.libnfc.modulation.iso14443a.br106.tags'
-	]
+    packages = [
+        'rfid', 
+        'rfid.libnfc', 
+        'rfid.libnfc.modulation', 
+        'rfid.libnfc.modulation.iso14443a', 
+        'rfid.libnfc.modulation.iso14443a.br106', 
+        'rfid.libnfc.modulation.iso14443a.br106.tags'
+    ]
 )
 

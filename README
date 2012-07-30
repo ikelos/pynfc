@@ -19,15 +19,15 @@ python setup.py install
 Examples
 --------
 examples/rfid/libnfc/
-	mifareauth.py - Conducts simple mifare authentication.
-	dump.py - Dumps the contents of a MIFARE Classic card (the keys needs to known in advance).
+    mifareauth.py - Conducts simple mifare authentication.
+    dump.py - Dumps the contents of a MIFARE Classic card (the keys needs to known in advance).
 
 
 History
 -------
 v0.0.7__July 2012 - (Boris Mazic) Added a framework for reading from and writing to RFID cards 
-		based on the Perl's libnfc binding by Xant. Repackaged everything in the rfid.libnfc 
-		namespace. Updated some structures to reflect libnfc-1.5.1 layout.
+        based on the Perl's libnfc binding by Xant. Repackaged everything in the rfid.libnfc 
+        namespace. Updated some structures to reflect libnfc-1.5.1 layout.
 
 
 

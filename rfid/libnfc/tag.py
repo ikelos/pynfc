@@ -5,7 +5,7 @@
 
 
 class Tag(object):
-	def __init__(self, reader, target):
-		self.reader = reader
-		self.target = target
+    def __init__(self, reader, target):
+        self.reader = reader
+        self.target = target
 
