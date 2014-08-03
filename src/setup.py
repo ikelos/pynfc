@@ -23,7 +23,7 @@ from distutils.core import setup, Extension
 
 setup(
     name = "pynfc",
-    version = "0.0.6",
+    version = "1.7.0_alpha1",
     description = "Python bindings for libnfc",
     author = "Mike Auty",
     data_files = [('examples', ['mifareauth.py'])],

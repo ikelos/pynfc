@@ -4,15 +4,13 @@ Pynfc - Python bindings for libnfc
 Requirements
 ------------
 
-libnfc >= 1.3.1
+libnfc >= 1.7.0
 python >= 2.6 < 3.0
 
 Building
 --------
 
-To build the bindings, use distutils as normal:
-
-python setup.py build_ext
+The bindings are constructed at runtime using ctypes.  Just ensure the library is correctly installed.
 
 Examples
 --------
@@ -43,9 +41,10 @@ Documentation
 
 The pynfc bindings should offer an intuitive, yet pythonic way of calling the standard libnfc API.
 
-The source code should feature document strings for all classes and objects, and the mifareauth example is commented.
-The python interface creates an nfc object that loosely wraps the pdi reference.
+This version of pynfc does not yet do that, it is currently just a duplicate of the C library calls without any strong python integration.
+
 As much as possible all libnfc commands are mirrored in the created nfc object.
 
-Please note this is in early development, and as such does not implement the full range of features found in libnfc itself.
+Please note whilst this does implement the full range of features found in libnfc, their use in python may be difficult or tricky to use.
+Pynfc requires much more development and time dedicated to it, before it will be useful as a production tool.
 

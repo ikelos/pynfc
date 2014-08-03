@@ -17,112 +17,220 @@
 #  along with this program; if not, write to the Free Software
 #  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import pynfc, pycrypto1, py14443a, sys
+import time
+import logging
+import ctypes
+import string
+import nfc
 
 def hex_dump(string):
     """Dumps data as hexstrings"""
     return ' '.join(["%0.2X" % ord(x) for x in string])
 
 ### NFC device setup
-devs = pynfc.list_devices()
-if not devs:
-    print "No readers found"
-    sys.exit(1)
-dev = devs[0]
-# Connect to the reader
-print "Connect to reader:",
-nfc = dev.connect(target = False)
-print bool(nfc)
-# Set tup the various connection fields
-print "Easy Framing False:", nfc.configure(nfc.NDO_EASY_FRAMING, False)
-print "Field Down:", nfc.configure(nfc.NDO_ACTIVATE_FIELD, False)
-print "CRC False:", nfc.configure(nfc.NDO_HANDLE_CRC, False)
-print "Parity True:", nfc.configure(nfc.NDO_HANDLE_PARITY, True)
-print "Field Up:", nfc.configure(nfc.NDO_ACTIVATE_FIELD, True)
+class NFCReader(object):
+    MC_AUTH_A = 0x60
+    MC_AUTH_B = 0x61
+    MC_READ = 0x30
+    MC_WRITE = 0xA0
+    card_timeout = 10
 
-# Start the run with the tag
-init = nfc.transceive_bits("\x26", 7)
-if (not init):
-    raise RuntimeError("Failed to initialize reader")
+    def __init__(self, logger):
+        self.__context = None
+        self.__device = None
+        self.log = logger
 
-# Create a Crypto1 object, set the key  
-crypto1 = pycrypto1.Crypto1()
-crypto1.set_key(0xA0A1A2A3A4A5)
+        self._card_present = False
+        self._card_last_seen = None
+        self._card_uid = None
+        self._clean_card()
 
-# Since we're using transceive_bytes,  
-nfc.configure(nfc.NDO_HANDLE_PARITY, True)
-msg = "\x93\x20"
-print "R -> T:", hex_dump(msg)
-uid = nfc.transceive_bytes(msg)
-print "T -> R:", hex_dump(uid)
-U_l = pycrypto1.bytes_to_long(uid[:4])
+        mods = [(nfc.NMT_ISO14443A, nfc.NBR_106)]
 
-msg = "\x93\x70" + uid + py14443a.crc("\x93\x70" + uid)
-print "R -> T:", hex_dump(msg)
-select = nfc.transceive_bytes(msg)
-if (not select):
-    raise RuntimeError("Failed to select card")
-print "T -> R:", hex_dump(select)
+        self.__modulations = (nfc.nfc_modulation * len(mods))()
+        for i in range(len(mods)):
+            self.__modulations[i].nmt = mods[i][0]
+            self.__modulations[i].nbr = mods[i][1]
 
-# We turn the parity handling OFF when sending our own
-# Our auth message is for key type A on block 4
-msg = "\x60\x00" + py14443a.crc("\x60\x00")
-nfc.configure(nfc.NDO_HANDLE_PARITY, False)
-print "R -> T:", hex_dump(msg)
-authresp = nfc.transceive_bits(msg, 32, py14443a.parity(msg))
+    def run(self):
+        """Starts the looping thread"""
+        self.__context = ctypes.pointer(nfc.nfc_context())
+        nfc.nfc_init(ctypes.byref(self.__context))
+        loop = True
+        try:
+            self._clean_card()
+            conn_strings = (nfc.nfc_connstring * 10)()
+            devices_found = nfc.nfc_list_devices(self.__context, conn_strings, 10)
+            if devices_found >= 1:
+                self.__device = nfc.nfc_open(self.__context, conn_strings[0])
+                try:
+                    _ = nfc.nfc_initiator_init(self.__device)
+                    while True:
+                        self._poll_loop()
+                finally:
+                    nfc.nfc_close(self.__device)
+            else:
+                self.log("NFC Waiting for device.")
+                time.sleep(5)
+        except (KeyboardInterrupt, SystemExit):
+            loop = False
+        except IOError, e:
+            self.log("Exception: " + str(e))
+            loop = True  # not str(e).startswith("NFC Error whilst polling")
+        # except Exception, e:
+        # loop = True
+        #    print "[!]", str(e)
+        finally:
+            nfc.nfc_exit(self.__context)
+            self.log("NFC Clean shutdown called")
+        return loop
 
-if not authresp:
-    raise RuntimeError("Failed during authentication request")
+    @staticmethod
+    def _sanitize(bytesin):
+        """Returns guaranteed ascii text from the input bytes"""
+        return "".join([x if 0x7f > ord(x) > 0x1f else '.' for x in bytesin])
 
-TN, bits, parity = authresp
-print "T -> R:", hex_dump(TN)
-TN_l = pycrypto1.bytes_to_long(TN)
-RR_l = crypto1.prng_next(TN_l, 64)
+    @staticmethod
+    def _hashsanitize(bytesin):
+        """Returns guaranteed hexadecimal digits from the input bytes"""
+        return "".join([x if x.lower() in 'abcdef0123456789' else '' for x in bytesin])
 
-# Input the UID xor TN for the first state
-# Since we're not doing nested auth, we don't care about the output    
-crypto1.get_word(U_l ^ TN_l, 1)
+    def _poll_loop(self):
+        """Starts a loop that constantly polls for cards"""
+        nt = nfc.nfc_target()
+        res = nfc.nfc_initiator_poll_target(self.__device, self.__modulations, len(self.__modulations), 10, 2,
+                                            ctypes.byref(nt))
+        # print "RES", res
+        if res < 0:
+            raise IOError("NFC Error whilst polling")
+        elif res >= 1:
+            uid = None
+            if nt.nti.nai.szUidLen == 4:
+                uid = "".join([chr(nt.nti.nai.abtUid[i]) for i in range(4)])
+            if uid:
+                if not ((self._card_uid and self._card_present and uid == self._card_uid) and \
+                                    time.mktime(time.gmtime()) <= self._card_last_seen + self.card_timeout):
+                    self._setup_device()
+                    self.read_card(uid)
+            self._card_uid = uid
+            self._card_present = True
+            self._card_last_seen = time.mktime(time.gmtime())
+        else:
+            self._card_present = False
+            self._clean_card()
 
-# Set an arbitrary RC (next of TN), this can probably be anything
-# Then generate the next states for crypto1
-RC_l = crypto1.prng_next(TN_l, 32)
-RC_x = crypto1.get_word(RC_l, 1)
-RR_x = crypto1.get_word(0, 1)
+    def _clean_card(self):
+        self._card_uid = None
 
-# Calculate this now, because we'll need the first bit for sending our response
-TR_x = crypto1.get_word(0, 1)
+    def select_card(self):
+        """Selects a card after a failed authentication attempt (aborted communications)
 
-# Make the cleartext response, calculate the cleartext parity, then encrypt the parity             
-msg = pycrypto1.long_to_bytes(RC_l) + pycrypto1.long_to_bytes(RR_l)
-par = py14443a.parity(msg)
-# Encrypt the message, then the parity
-msg = pycrypto1.long_to_bytes(RC_l ^ RC_x) + pycrypto1.long_to_bytes(RR_l ^ RR_x)
-xpar = crypto1.encrypt_parity_word(par[:4], RC_x, RR_x) + crypto1.encrypt_parity_word(par[4:], RR_x, TR_x)
+           Returns the UID of the card selected
+        """
+        nt = nfc.nfc_target()
+        _ = nfc.nfc_initiator_select_passive_target(self.__device, self.__modulations[0], None, 0, ctypes.byref(nt))
+        uid = "".join([chr(nt.nti.nai.abtUid[i]) for i in range(nt.nti.nai.szUidLen)])
+        return uid
 
-print "R -> T:", hex_dump(msg)
-authresp2 = nfc.transceive_bits(msg, 64, xpar)
-if not authresp2:
-    raise RuntimeError("Failed to authenticate, check the key is correct")
+    def _setup_device(self):
+        """Sets all the NFC device settings for reading from Mifare cards"""
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_ACTIVATE_CRYPTO1, True) < 0:
+            raise Exception("Error setting Crypto1 enabled")
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_INFINITE_SELECT, False) < 0:
+            raise Exception("Error setting Single Select option")
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_AUTO_ISO14443_4, False) < 0:
+            raise Exception("Error setting No Auto ISO14443-A jiggery pokery")
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_HANDLE_PARITY, True) < 0:
+            raise Exception("Error setting Easy Framing property")
 
-TR, bits, TR_par = authresp2
-print "T -> R:", hex_dump(TR)
-print "TR == Next(TN, 96):", (pycrypto1.bytes_to_long(TR) ^ TR_x) == crypto1.prng_next(TN_l, 96)
+    def _read_block(self, block):
+        """Reads a block from a Mifare Card after authentication
 
-ks1 = crypto1.get_word(0, 1)
-ks2 = crypto1.get_word(0, 1)
+           Returns the data read or raises an exception
+        """
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_EASY_FRAMING, True) < 0:
+            raise Exception("Error setting Easy Framing property")
+        abttx = (ctypes.c_uint8 * 2)()
+        abttx[0] = self.MC_READ
+        abttx[1] = block
+        abtrx = (ctypes.c_uint8 * 250)()
+        res = nfc.nfc_initiator_transceive_bytes(self.__device, ctypes.pointer(abttx), len(abttx),
+                                                 ctypes.pointer(abtrx), len(abtrx), 0)
+        if res < 0:
+            raise IOError("Error reading data")
+        return "".join([chr(abtrx[i]) for i in range(res)])
 
-msg = "\x30\x00" + py14443a.crc("\x30\x00")
-par = py14443a.parity(msg)
+    def __write_block(self, block, data):
+        """Writes a block of data to a Mifare Card after authentication
 
-msg = pycrypto1.long_to_bytes(pycrypto1.bytes_to_long(msg) ^ ks1)
-xpar = crypto1.encrypt_parity_word(par, ks1, ks2)
+           Raises an exception on error
+        """
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_EASY_FRAMING, True) < 0:
+            raise Exception("Error setting Easy Framing property")
+        if len(data) > 16:
+            raise ValueError("Data value to be written cannot be more than 16 characters.")
+        abttx = (ctypes.c_uint8 * 18)()
+        abttx[0] = self.MC_WRITE
+        abttx[1] = block
+        abtrx = (ctypes.c_uint8 * 250)()
+        for i in range(16):
+            abttx[i + 2] = ord((data + "\x00" * (16 - len(data)))[i])
+        return nfc.nfc_initiator_transceive_bytes(self.__device, ctypes.pointer(abttx), len(abttx),
+                                                  ctypes.pointer(abtrx), len(abtrx), 0)
 
-print "R -> T:", hex_dump(msg)
+    def _authenticate(self, block, uid, key = "\xff\xff\xff\xff\xff\xff", use_b_key = False):
+        """Authenticates to a particular block using a specified key"""
+        if nfc.nfc_device_set_property_bool(self.__device, nfc.NP_EASY_FRAMING, True) < 0:
+            raise Exception("Error setting Easy Framing property")
+        abttx = (ctypes.c_uint8 * 12)()
+        abttx[0] = self.MC_AUTH_A if not use_b_key else self.MC_AUTH_B
+        abttx[1] = block
+        for i in range(6):
+            abttx[i + 2] = ord(key[i])
+        for i in range(4):
+            abttx[i + 8] = ord(uid[i])
+        abtrx = (ctypes.c_uint8 * 250)()
+        return nfc.nfc_initiator_transceive_bytes(self.__device, ctypes.pointer(abttx), len(abttx),
+                                                  ctypes.pointer(abtrx), len(abtrx), 0)
 
-res = nfc.transceive_bits(msg, 4 * 8, xpar)
+    def auth_and_read(self, block, uid, key = "\xff\xff\xff\xff\xff\xff"):
+        """Authenticates and then reads a block
 
-if not res:
-    raise RuntimeError("Failed to transceive for some reason")
+           Returns '' if the authentication failed
+        """
+        # Reselect the card so that we can reauthenticate
+        self.select_card()
+        res = self._authenticate(block, uid, key)
+        if res >= 0:
+            return self._read_block(block)
+        return ''
 
-(data, bits, par) = res
-print "T -> R:", hex_dump(pycrypto1.long_to_bytes(pycrypto1.bytes_to_long(data[:4]) ^ ks2))
+    def auth_and_write(self, block, uid, data, key = "\xff\xff\xff\xff\xff\xff"):
+        """Authenticates and then writes a block
+
+        """
+        res = self._authenticate(block, uid, key)
+        if res >= 0:
+            return self.__write_block(block, data)
+        self.select_card()
+        return ""
+
+    def read_card(self, uid):
+        """Takes a uid, reads the card and return data for use in writing the card"""
+        key = "\xff\xff\xff\xff\xff\xff"
+        print "Reading card", uid.encode("hex")
+        self._card_uid = self.select_card()
+        self._authenticate(0x00, uid, key)
+        block = 0
+        for block in range(64):
+            data = self.auth_and_read(block, uid, key)
+            print block, data.encode("hex"), "".join([ x if x in string.printable else "." for x in data])
+
+    def write_card(self, uid, data):
+        """Accepts data of the recently read card with UID uid, and writes any changes necessary to it"""
+        raise NotImplementedError
+
+if __name__ == '__main__':
+    logger = logging.getLogger("cardhandler").info
+    while NFCReader(logger).run():
+        pass

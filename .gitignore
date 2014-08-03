@@ -1,5 +1,5 @@
 *_wrap.c
 *.so
 build
-nfc.py
 *.pyc
+.idea
