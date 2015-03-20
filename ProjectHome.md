@@ -1,0 +1,1 @@
+Pynfc provides a pythonic interface for the libnfc library, allowing access to ISO-14443a and similar RFID/NFC cards supported by libnfc.
